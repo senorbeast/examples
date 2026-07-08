@@ -1,10 +1,6 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import {
-  CameraView,
-  scanFromURLAsync,
-  type BarcodeScanningResult,
-} from "expo-camera";
+import { CameraView, scanFromURLAsync, type BarcodeScanningResult } from "expo-camera";
 import { useEffect, useRef, useState } from "react";
 import { Text, View } from "react-native";
 
@@ -20,13 +16,9 @@ type ScanScreenProps = {
 };
 
 export function ScanScreen({ onTicketScanned, onCameraError }: ScanScreenProps) {
-  const camera = useRef<CameraView>(null);
   const hasScanned = useRef(false);
-  const isSnapshotScanning = useRef(false);
   const objectUrl = useRef<string | null>(null);
-  const scanAttempts = useRef(0);
-  const [isCameraReady, setIsCameraReady] = useState(false);
-  const [scanMessage, setScanMessage] = useState("Starting camera...");
+  const [scanMessage, setScanMessage] = useState("Ready to scan");
 
   useEffect(() => {
     return () => {
@@ -35,22 +27,6 @@ export function ScanScreen({ onTicketScanned, onCameraError }: ScanScreenProps) 
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!isCameraReady) {
-      return;
-    }
-
-    setScanMessage("Scanning camera feed...");
-
-    const intervalId = setInterval(() => {
-      void scanCameraSnapshot();
-    }, 900);
-
-    void scanCameraSnapshot();
-
-    return () => clearInterval(intervalId);
-  }, [isCameraReady]);
 
   const handleDetectedPayload = (rawPayload: string) => {
     if (hasScanned.current) {
@@ -63,47 +39,6 @@ export function ScanScreen({ onTicketScanned, onCameraError }: ScanScreenProps) 
 
   const handleBarcodeScanned = (event: BarcodeScanningResult) => {
     handleDetectedPayload(event.data);
-  };
-
-  const scanCameraSnapshot = async () => {
-    if (hasScanned.current || isSnapshotScanning.current || !camera.current) {
-      return;
-    }
-
-    isSnapshotScanning.current = true;
-
-    try {
-      const photo = await camera.current.takePictureAsync({
-        quality: 0.8,
-        skipProcessing: true,
-      });
-
-      if (!photo?.uri || hasScanned.current) {
-        return;
-      }
-
-      const scans = await scanFromURLAsync(photo.uri, ["qr"]);
-      const qrScan = scans[0];
-
-      if (qrScan?.data) {
-        handleDetectedPayload(qrScan.data);
-        return;
-      }
-
-      scanAttempts.current += 1;
-
-      if (scanAttempts.current >= 5) {
-        setScanMessage("Still scanning. Center the QR, hold steady, and keep a white border visible.");
-      }
-    } catch {
-      scanAttempts.current += 1;
-
-      if (scanAttempts.current >= 3) {
-        setScanMessage("Camera is on. Hold the QR steady or use Upload QR Image.");
-      }
-    } finally {
-      isSnapshotScanning.current = false;
-    }
   };
 
   const handleImageUpload = async () => {
@@ -146,12 +81,10 @@ export function ScanScreen({ onTicketScanned, onCameraError }: ScanScreenProps) 
   return (
     <View style={styles.scanLayout}>
       <CameraView
-        ref={camera}
         style={styles.camera}
         facing="back"
         barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
         onBarcodeScanned={handleBarcodeScanned}
-        onCameraReady={() => setIsCameraReady(true)}
         onMountError={(event) => onCameraError(event.message)}
       />
 
