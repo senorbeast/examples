@@ -1,8 +1,5 @@
 # Camera Example
 
-
-test
-
 <p>
   <!-- iOS -->
   <a href="https://itunes.apple.com/app/apple-store/id982107779">
@@ -37,3 +34,13 @@ This example shows how to take a picture and display it.
 ## 📝 Notes
 
 - Learn more about [Expo Camera](https://docs.expo.dev/versions/latest/sdk/camera).
+
+## Deploy to Vercel
+
+This project is configured for Vercel as a static Expo web export.
+
+- Build command: `yarn build`
+- Output directory: `dist`
+- Install command: `yarn install --frozen-lockfile`
+
+The included `vercel.json` also rewrites all routes to `index.html`, which keeps client-side routing deploy-safe if routes are added later.
