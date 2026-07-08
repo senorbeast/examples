@@ -1,163 +1,91 @@
-import {
-  CameraMode,
-  CameraType,
-  CameraView,
-  useCameraPermissions,
-} from "expo-camera";
-import { useRef, useState } from "react";
-import { Button, Pressable, StyleSheet, Text, View } from "react-native";
-import { Image } from "expo-image";
-import AntDesign from "@expo/vector-icons/AntDesign";
-import Feather from "@expo/vector-icons/Feather";
-import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
+import { useCameraPermissions } from "expo-camera";
+import { useMemo, useState } from "react";
+
+import { AppShell } from "./src/components/AppShell";
+import { NoticeScreen } from "./src/components/NoticeScreen";
+import { FALLBACK_STATION } from "./src/constants";
+import { HomeScreen } from "./src/screens/HomeScreen";
+import { ResultScreen } from "./src/screens/ResultScreen";
+import { ScanScreen } from "./src/screens/ScanScreen";
+import type { ScanResult, Screen } from "./src/types";
+import { formatToday } from "./src/utils/date";
 
 export default function App() {
   const [permission, requestPermission] = useCameraPermissions();
-  const ref = useRef<CameraView>(null);
-  const [uri, setUri] = useState<string | null>(null);
-  const [mode, setMode] = useState<CameraMode>("picture");
-  const [facing, setFacing] = useState<CameraType>("back");
-  const [recording, setRecording] = useState(false);
+  const [screen, setScreen] = useState<Screen>("home");
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const today = useMemo(formatToday, []);
+  const stationName = scanResult?.source ?? FALLBACK_STATION;
 
-  if (!permission) {
-    return null;
-  }
+  const startScan = async () => {
+    setCameraError(null);
+    setScanResult(null);
 
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <Text style={{ textAlign: "center" }}>
-          We need your permission to use the camera
-        </Text>
-        <Button onPress={requestPermission} title="Grant permission" />
-      </View>
-    );
-  }
-
-  const takePicture = async () => {
-    const photo = await ref.current?.takePictureAsync();
-    if (photo?.uri) setUri(photo.uri);
-  };
-
-  const recordVideo = async () => {
-    if (recording) {
-      setRecording(false);
-      ref.current?.stopRecording();
-      return;
+    if (!permission?.granted) {
+      await requestPermission();
     }
-    setRecording(true);
-    const video = await ref.current?.recordAsync();
-    console.log({ video });
+
+    setScreen("scan");
   };
 
-  const toggleMode = () => {
-    setMode((prev) => (prev === "picture" ? "video" : "picture"));
+  const retryScan = () => {
+    setCameraError(null);
+    setScanResult(null);
+    setScreen("home");
   };
 
-  const toggleFacing = () => {
-    setFacing((prev) => (prev === "back" ? "front" : "back"));
+  const handleTicketScanned = (result: ScanResult) => {
+    setScanResult(result);
+    setScreen("result");
   };
 
-  const renderPicture = (uri: string) => {
-    return (
-      <View>
-        <Image
-          source={{ uri }}
-          contentFit="contain"
-          style={{ width: 300, aspectRatio: 1 }}
+  const renderContent = () => {
+    if (screen === "home") {
+      return <HomeScreen onStart={startScan} />;
+    }
+
+    if (!permission?.granted) {
+      return (
+        <NoticeScreen
+          title="Camera Permission Needed"
+          message="Allow camera access to scan ticket QR codes."
+          actionLabel="Grant Permission"
+          iconName="camera-outline"
+          actionIconName="camera"
+          onAction={requestPermission}
         />
-        <Button onPress={() => setUri(null)} title="Take another picture" />
-      </View>
-    );
-  };
+      );
+    }
 
-  const renderCamera = () => {
-    return (
-      <View style={styles.cameraContainer}>
-        <CameraView
-          style={styles.camera}
-          ref={ref}
-          mode={mode}
-          facing={facing}
-          mute={false}
-          responsiveOrientationWhenOrientationLocked
+    if (cameraError) {
+      return (
+        <NoticeScreen
+          title="Camera Unavailable"
+          message={cameraError}
+          actionLabel="Retry Scan"
+          iconName="warning-outline"
+          actionIconName="refresh"
+          onAction={retryScan}
+          tone="error"
         />
-        <View style={styles.shutterContainer}>
-          <Pressable onPress={toggleMode}>
-            {mode === "picture" ? (
-              <AntDesign name="picture" size={32} color="white" />
-            ) : (
-              <Feather name="video" size={32} color="white" />
-            )}
-          </Pressable>
-          <Pressable onPress={mode === "picture" ? takePicture : recordVideo}>
-            {({ pressed }) => (
-              <View
-                style={[
-                  styles.shutterBtn,
-                  {
-                    opacity: pressed ? 0.5 : 1,
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.shutterBtnInner,
-                    {
-                      backgroundColor: mode === "picture" ? "white" : "red",
-                    },
-                  ]}
-                />
-              </View>
-            )}
-          </Pressable>
-          <Pressable onPress={toggleFacing}>
-            <FontAwesome6 name="rotate-left" size={32} color="white" />
-          </Pressable>
-        </View>
-      </View>
-    );
+      );
+    }
+
+    if (screen === "scan") {
+      return <ScanScreen onTicketScanned={handleTicketScanned} onCameraError={setCameraError} />;
+    }
+
+    if (scanResult) {
+      return <ResultScreen result={scanResult} onRetry={retryScan} />;
+    }
+
+    return <HomeScreen onStart={startScan} />;
   };
 
   return (
-    <View style={styles.container}>
-      {uri ? renderPicture(uri) : renderCamera()}
-    </View>
+    <AppShell stationName={stationName} today={today}>
+      {renderContent()}
+    </AppShell>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cameraContainer: StyleSheet.absoluteFillObject,
-  camera: StyleSheet.absoluteFillObject,
-  shutterContainer: {
-    position: "absolute",
-    bottom: 44,
-    left: 0,
-    width: "100%",
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 30,
-  },
-  shutterBtn: {
-    backgroundColor: "transparent",
-    borderWidth: 5,
-    borderColor: "white",
-    width: 85,
-    height: 85,
-    borderRadius: 45,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  shutterBtnInner: {
-    width: 70,
-    height: 70,
-    borderRadius: 50,
-  },
-});
